@@ -8,7 +8,7 @@ from flask_swagger import swagger
 from flask_cors import CORS
 from utils import APIException, generate_sitemap
 from admin import setup_admin
-from models import db, User, Personaje, Planeta,FavoritePlaneta
+from models import db, User, Personaje, Planeta,FavoritePlaneta, FavoritePersonaje
 from flask_jwt_extended import JWTManager
 from flask_jwt_extended import create_access_token
 from flask_jwt_extended import get_jwt_identity
@@ -120,57 +120,62 @@ def create_token():
 @app.route("/users/favorites", methods=["GET"])
 @jwt_required()
 def get_current_users_favorites():
-    # Accede a la identidad del usuario actual con get_jwt_identity
+
     current_user_email = get_jwt_identity()
-    
-    # Busca al usuario actual en la base de datos
+
     current_user = User.query.filter_by(email=current_user_email).first()
-    
+
     if current_user is None:
-        # Si el usuario no se encuentra, devuelve un mensaje de error
         return jsonify({"error": "Usuario no encontrado"}), 404
-    
-    # Obtén los favoritos del usuario actual
-    favorites_personajes = current_user.favorite_personajes
-    favorites_planetas = current_user.favorite_planetas
     
     # Serializa los favoritos y devuelve la respuesta en formato JSON
-    serialized_favorites_personajes = [fav.serialize() for fav in favorites_personajes]
-    serialized_favorites_planetas = [fav.serialize() for fav in favorites_planetas]
-    
-    return jsonify({
-        "favorite_personajes": serialized_favorites_personajes,
-        "favorite_planetas": serialized_favorites_planetas
-    }), 200
+    return jsonify(current_user.serialize()), 200
 
 @app.route('/favorite/planet/<int:planet_id>', methods=['POST'])
-@jwt_required()
-def add_favorite_planet(planet_id):
+def add_new_fav_planet(planet_id):
+    user = User.query.first()    
+    if user:
+        planet = Planeta.query.get(planet_id)
+        if planet:
+            fav = FavoritePlaneta(user_id = user.id, planeta_id = planet_id) #crea una nueva instancia de favoritoPlanea
+            db.session.add(fav)
+            db.session.commit()
+            return jsonify({'msg': 'Planet added successfully'}), 200
+        else: return jsonify({'msg': 'Planet not found'}), 404
+    else: return jsonify({'msg': 'User not found'}), 404
 
-  
-    current_user_email = get_jwt_identity()
-    print("correo electronico del usuario:" , current_user_email)
-    current_user = User.query.filter_by(email=current_user_email).first()
+@app.route('/favorite/people/<int:people_id>', methods=['POST'])
+def add_new_fav_personaje(people_id):
+    user = User.query.first()    
+    if user:
+        personaje = Personaje.query.get(people_id)
+        if personaje:
+            fav = FavoritePersonaje(user_id = user.id, personaje_id = people_id) #crea una nueva instancia de favoritoPlanea
+            db.session.add(fav)
+            db.session.commit()
+            return jsonify({'msg': 'Personaje added successfully'}), 200
+        else: return jsonify({'msg': 'Personaje not found'}), 404
+    else: return jsonify({'msg': 'User not found'}), 404
 
-    # Verificar si el usuario existe
-    if current_user is None:
-        return jsonify({"error": "Usuario no encontrado"}), 404
-
-    # Verificar si el planeta existe
-    planet = Planeta.query.get(planet_id)
-    if planet is None:
-        return jsonify({"error": "Planeta no encontrado"}), 404
-
-    # Verificar si el planeta ya es un favorito del usuario
-    if planet in current_user.favorite_planetas:
-        return jsonify({"message": "El planeta ya es un favorito"}), 200
-
-    current_user.favorite_planetas.append(planet)
-
-    db.session.commit()
-
-    return jsonify({"message": "Planeta añadido como favorito"}), 200
-
+@app.route('/favorite/people/<int:people_id>', methods=['DELETE'])
+def delete_personaje(people_id):
+    favorite = FavoritePersonaje.query.filter_by(personaje_id=people_id).first()
+    if favorite is None:
+        return jsonify({'msg': 'Personaje not found'}), 404
+    else:
+        db.session.delete(favorite)
+        db.session.commit()
+        return jsonify({"msg": f"Personaje {favorite.personaje_id} deleted"}),200
+    
+@app.route('/favorite/planet/<int:planet_id>', methods=['DELETE'])
+def delete_planeta(planet_id):
+    favorite = FavoritePlaneta.query.filter_by(planeta_id=planet_id).first()
+    if favorite is None:
+        return jsonify({'msg': 'Planeta not found'}), 404
+    else:
+        db.session.delete(favorite)
+        db.session.commit()
+        return jsonify({"msg": f"Planeta {favorite.planeta_id} deleted"}),200
 # this only runs if `$ python src/app.py` is executed
 if __name__ == '__main__':
     PORT = int(os.environ.get('PORT', 3000))

@@ -13,9 +13,11 @@ class User(db.Model):
   password = db.Column(db.String(80), unique=False, nullable=False)
   is_active = db.Column(db.Boolean(), unique=False, nullable=False)
 
-  # Relación con los favoritos de personajes y planetas del usuario
-  favorite_personajes = db.relationship('FavoritePersonaje', backref='user_personajes', lazy=True)
-  favorite_planetas = db.relationship('FavoritePlaneta', backref='user_planetas', lazy=True)
+  def __init__(self, id, email, password, is_active):
+      self.id = id
+      self.email = email
+      self.password = password
+      self.is_active = is_active
 
   def __repr__(self):
     return '<User %r>' % self.email
@@ -24,9 +26,9 @@ class User(db.Model):
     return {
         "id": self.id,
         "email": self.email,
-        "favorite_personajes": [fav_personaje.serialize() for fav_personaje in self.favorite_personajes],  # Serializa los favoritos de personajes del usuario
-        "favorite_planetas": [fav_planeta.serialize() for fav_planeta in self.favorite_planetas],  # Serializa los favoritos de planetas del usuario
-        # No serializar la contraseña, es un riesgo de seguridad
+        "favorite_planetas_ref": [favorite.serialize() for favorite in self.favorite_planetas_ref] if self.favorite_planetas_ref else None,
+        "favorite_personaje_ref": [favorite.serialize() for favorite in self.favorite_personaje_ref] if self.favorite_personaje_ref else None
+        # # No serializar la contraseña, es un riesgo de seguridad
     }
 class Personaje(db.Model):
     __tablename__ = 'personaje' 
@@ -34,9 +36,9 @@ class Personaje(db.Model):
     name = db.Column(db.String(250),nullable = False)
   
     
-    # def __init__(self,id,name):
-    #     self.id = id
-    #     self.name = name
+    def __init__(self,id,name):
+       self.id = id
+       self.name = name
              
 
     def __repr__(self):
@@ -57,9 +59,9 @@ class Planeta(db.Model):
     name = db.Column(db.String(250), nullable=False)
     
     
-    # def __init__(self, id,name):
-    #     self.id = id
-    #     self.name = name
+    def __init__(self, id,name):
+       self.id = id
+       self.name = name
            
 
     def __repr__(self):
@@ -91,10 +93,7 @@ class FavoritePlaneta(db.Model):
          return {
              "id": self.id,
              "user_id": self.user_id,
-             "user": self.user.serialize(),  # Serializar el objeto relacionado
-             "planeta_id": self.planeta_id,
-             "planeta": self.planeta.serialize()  # Serializar el objeto relacionado
-
+             "planeta_id": self.planeta_id
          }
 
 class FavoritePersonaje(db.Model):
@@ -114,10 +113,7 @@ class FavoritePersonaje(db.Model):
 
      def serialize(self):
          return {
-             "id": self.id,
-             "user_id": self.user_id,
-             "user": self.user.serialize(),  # Serializar el objeto relacionado
-             "personaje_id": self.personaje_id,
-             "personaje": self.personaje.__serialize__() #aseguro con esto de que cuando serialice una instancia de favoritoPersonaje tambien obtengo los datos completos de la tabla personaje.
-
+            "id": self.id,
+            "user_id": self.user_id,
+            "personaje_id": self.personaje_id
          }
