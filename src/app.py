@@ -8,10 +8,19 @@ from flask_swagger import swagger
 from flask_cors import CORS
 from utils import APIException, generate_sitemap
 from admin import setup_admin
-from models import db, User
+from models import db, User, Personaje, Planeta,FavoritePlaneta
+from flask_jwt_extended import JWTManager
+from flask_jwt_extended import create_access_token
+from flask_jwt_extended import get_jwt_identity
+from flask_jwt_extended import jwt_required
 #from models import Person
 
 app = Flask(__name__)
+# Setup the Flask-JWT-Extended extension
+app.config["JWT_SECRET_KEY"] = "super-secret"  # Change this!
+jwt = JWTManager(app)
+
+
 app.url_map.strict_slashes = False
 
 db_url = os.getenv("DATABASE_URL")
@@ -38,12 +47,129 @@ def sitemap():
 
 @app.route('/user', methods=['GET'])
 def handle_hello():
+    users = User.query.all()
 
-    response_body = {
-        "msg": "Hello, this is your GET /user response "
-    }
+    response_body = [user.serialize() for user in users]
 
     return jsonify(response_body), 200
+
+
+@app.route('/personaje', methods=['GET'])
+def get_personajes():
+  
+    personajes = Personaje.query.all()
+
+    # Serializar los personajes y crear una lista de diccionarios
+    serialized_personajes = [personaje.serialize() for personaje in personajes]
+
+    # Devolver la lista de personajes como una respuesta JSON
+    return jsonify(serialized_personajes), 200
+
+
+@app.route('/people/<int:people_id>', methods=['GET'])
+def get_Onepersonaje(people_id):
+
+    personaje = Personaje.query.get(people_id)
+    
+    if personaje: 
+        serialized_personaje = personaje.serialize()
+        return jsonify(serialized_personaje), 200
+    else:
+        return jsonify({'message': 'Personaje no encontrado'}), 404
+
+
+@app.route('/planets', methods =['GET'])
+def get_planeta():
+    planets = Planeta.query.all()
+
+    response_body = [planet.serialize() for planet in planets]
+
+    return jsonify(response_body), 200
+
+@app.route('/planets/<int:planet_id>', methods=['GET'])
+def get_Oneplaneta(planet_id):
+
+    planeta = Planeta.query.get(planet_id)
+    
+    if planeta: 
+        serialized_planeta = planeta.serialize()
+        return jsonify(serialized_planeta), 200
+    else:
+        return jsonify({'message': 'Planeta no encontrado'}), 404
+    
+@app.route("/login", methods=["POST"])
+def create_token():
+    email = request.json.get("email", None)
+    password = request.json.get("password", None)
+
+    # Consulta la base de datos por el email de usuario y la contraseña
+    user = User.query.filter_by(email=email, password=password).first()
+
+    if user is None:
+        # el usuario no se encontró en la base de datos
+        return jsonify({"msg": "Bad email or password"}), 401
+    
+    # Crea un nuevo token con el id de usuario dentro
+    access_token = create_access_token(identity=user.email)
+    return jsonify({ "token": access_token, "user_id": user.id})
+
+
+# Protect a route with jwt_required, which will kick out requests
+# without a valid JWT present.
+
+@app.route("/users/favorites", methods=["GET"])
+@jwt_required()
+def get_current_users_favorites():
+    # Accede a la identidad del usuario actual con get_jwt_identity
+    current_user_email = get_jwt_identity()
+    
+    # Busca al usuario actual en la base de datos
+    current_user = User.query.filter_by(email=current_user_email).first()
+    
+    if current_user is None:
+        # Si el usuario no se encuentra, devuelve un mensaje de error
+        return jsonify({"error": "Usuario no encontrado"}), 404
+    
+    # Obtén los favoritos del usuario actual
+    favorites_personajes = current_user.favorite_personajes
+    favorites_planetas = current_user.favorite_planetas
+    
+    # Serializa los favoritos y devuelve la respuesta en formato JSON
+    serialized_favorites_personajes = [fav.serialize() for fav in favorites_personajes]
+    serialized_favorites_planetas = [fav.serialize() for fav in favorites_planetas]
+    
+    return jsonify({
+        "favorite_personajes": serialized_favorites_personajes,
+        "favorite_planetas": serialized_favorites_planetas
+    }), 200
+
+@app.route('/favorite/planet/<int:planet_id>', methods=['POST'])
+@jwt_required()
+def add_favorite_planet(planet_id):
+
+  
+    current_user_email = get_jwt_identity()
+    print("correo electronico del usuario:" , current_user_email)
+    current_user = User.query.filter_by(email=current_user_email).first()
+
+    # Verificar si el usuario existe
+    if current_user is None:
+        return jsonify({"error": "Usuario no encontrado"}), 404
+
+    # Verificar si el planeta existe
+    planet = Planeta.query.get(planet_id)
+    if planet is None:
+        return jsonify({"error": "Planeta no encontrado"}), 404
+
+    # Verificar si el planeta ya es un favorito del usuario
+    if planet in current_user.favorite_planetas:
+        return jsonify({"message": "El planeta ya es un favorito"}), 200
+
+    current_user.favorite_planetas.append(planet)
+
+    db.session.commit()
+
+    return jsonify({"message": "Planeta añadido como favorito"}), 200
 
 # this only runs if `$ python src/app.py` is executed
 if __name__ == '__main__':
