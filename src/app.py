@@ -54,7 +54,7 @@ def handle_hello():
     return jsonify(response_body), 200
 
 
-@app.route('/personaje', methods=['GET'])
+@app.route('/people', methods=['GET'])
 def get_personajes():
   
     personajes = Personaje.query.all()
